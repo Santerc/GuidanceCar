@@ -34,6 +34,14 @@ extern "C" {
         kRight = 4
     };
 
+    enum MoveState {
+        kStopStatue = 0,
+        kForwardStatue = 1,
+        kBackwardStatue = 2,
+        kLeftStatue = 3,
+        kRightStatue = 4
+    };
+
     const uint8_t GetStopFlag();
     const uint8_t GetMoveState();
     const uint8_t GetState();

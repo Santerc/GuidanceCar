@@ -29,6 +29,8 @@ insData_t ins_data;
 
 uint32_t last_tick = 0;
 
+uint32_t prev_time = 0;
+
 void eulerToRotationMatrix(float32_t roll, float32_t pitch, float32_t yaw, float32_t* R) {
     float32_t cr = cosf(roll), sr = sinf(roll);
     float32_t cp = cosf(pitch), sp = sinf(pitch);
@@ -116,10 +118,23 @@ void Navigation() {
         rk4Integrate(vel, acc_global);
 }
 
+void Inti() {
+    float DeltaTime = (HAL_GetTick() - prev_time) / 1000.F;
+    ins_data.self_vel_.x += ins.accel_data_.x * DeltaTime;
+    ins_data.self_vel_.y += ins.accel_data_.y * DeltaTime;
+    ins_data.self_vel_.z += ins.accel_data_.z * DeltaTime;
+}
+
 
 static void INS_Task(void* parameter)
 {
     static bool init_flag{false};
+    ins_data = {
+        0,0,0,
+        0, 0, 0,
+        0, 0, 0,
+        0, 0, 0,
+        0, 0, 0};
     if (!init_flag) {
         bsp::DWT_Init(170);
         ins.Init();
@@ -149,7 +164,18 @@ static void INS_Task(void* parameter)
         //     bsx_out.orientation.yaw,
         //     bsx_out.orientation.pitch,
         //     bsx_out.orientation.roll};
-        Navigation();
+        // Navigation();
+
+        ins_data.space_omega_ = {
+            ins.gyro_data_.yaw,
+            ins.gyro_data_.pitch,
+            ins.gyro_data_.row
+        };
+        ins_data.space_att_ = {
+            bsx_out.orientation.yaw,
+            bsx_out.orientation.pitch,
+            bsx_out.orientation.roll
+        };
 
         osDelay(10);
     }

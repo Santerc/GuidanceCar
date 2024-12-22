@@ -4,13 +4,14 @@
 #include "cmsis_os.h"
 #include "task/chassis.h"
 #include "task/com.h"
+#include "task/ins.h"
 
 #include "periph/toymotor.h"
 #include "periph/ultrasound.h"
 #include "periph/boson.h"
 #include "fsm.hpp"
 
-    bsp::GPIO left_f(*GPIOG, GPIO_PIN_5);
+bsp::GPIO left_f(*GPIOG, GPIO_PIN_5);
     bsp::GPIO left_b(*GPIOG, GPIO_PIN_6);
     bsp::GPIO right_f(*GPIOG, GPIO_PIN_7);
     bsp::GPIO right_b(*GPIOG, GPIO_PIN_8);
@@ -65,12 +66,15 @@
         bool on_road_;
         bool obstacle_;
         bool station_arrive_;
+        float vx_ = 0;
+        float vw_ = 0;
         TrackingState pos_;
         StateMachine state_;
         StateMachine last_state_;
         RoadSide latest_side_road_;
         fsm::stack chassis_sm_;
         uint32_t waiting_start_time_;
+
 
 
         void Init() {
@@ -223,6 +227,8 @@
         }
 
         void SetSpeed(float vx, float vw) {
+            vx_ = vx;
+            vw_ = vw;
             motor_left_.SetSpeed(vx + vw);
             motor_right_.SetSpeed(vx - vw);
         }
@@ -298,7 +304,22 @@ const uint8_t GetStopFlag() {
 }
 
 const uint8_t GetMoveState() {
-    return 0;
+    if (chassis.vw_ == 0 && chassis.vx_ == 0) {
+        return kStopMove;
+    }
+    if (GetInsData()->space_omega_.yaw > 0.1) {
+        return kLeftMove;
+    }
+    if (GetInsData()->space_omega_.yaw < 0.1) {
+        return kLeftMove;
+    }
+    if (GetInsData()->self_vel_.x > 0.1) {
+        return kFrontMove;
+    }
+    if (GetInsData()->self_vel_.x < 0.1) {
+        return kBackMove;
+    }
+    return kStopMove;
 }
 const uint8_t GetState()
 {

@@ -90,7 +90,7 @@ void MX_FREERTOS_Init(void) {
   InsTaskStart();
   DetectTaskStart();
   ChassisTaskStart();
-  ComTaskStart();
+  // ComTaskStart();
 
   /* USER CODE END Init */
 

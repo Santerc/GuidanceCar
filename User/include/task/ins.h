@@ -27,6 +27,8 @@ extern "C" {
         Axis space_vel_;
         Axis space_pos_;
         Euler space_att_;
+        Euler space_omega_;
+        Axis self_vel_;
     }insData_t;
 
     const insData_t* GetInsData();

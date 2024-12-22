@@ -11,22 +11,25 @@ extern "C" {
 #endif
 
     enum Mode{
-        kRemoteMode = 1,
-        kTrackingMode = 0,
+        kRemoteMode = 0,
+        kTrackingMode = 1,
         kMappingMode = 2,
         kGuidanceMode = 3,
     };
 
     enum Move {
-        kFrontMove = 0,
-        kBackMove = 1,
-        kLeftMove = 2,
-        kRightMove = 3,
+        kStopMove = 0,
+        kFrontMove = 1,
+        kBackMove = 2,
+        kLeftMove = 3,
+        kRightMove = 4,
     };
 
     enum SpeedLevel {
-        kFast = 0,
-        kSlow = 1,
+        kLv1 = 1,
+        kLv2 = 2,
+        kLv3 = 3,
+        kLv4 = 4
     };
 
     typedef struct{
