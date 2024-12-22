@@ -13,7 +13,7 @@ extern "C" {
 #endif
 
     static void UI_Task(void* parameter);
-    void UITaskStart();
+    void UI_TaskStart();
 
 #ifdef __cplusplus
 }

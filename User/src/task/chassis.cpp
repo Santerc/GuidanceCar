@@ -300,7 +300,15 @@ const uint8_t GetStopFlag() {
 const uint8_t GetMoveState() {
     return 0;
 }
+const uint8_t GetState()
+{
+    return chassis.state_;
+}
 
+const uint8_t GetLastState()
+{
+    return chassis.last_state_;
+}
 void Chassis_Task(void *parameter) {
     chassis.Init();
     while (true) {

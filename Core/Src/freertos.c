@@ -86,6 +86,7 @@ void vApplicationGetIdleTaskMemory( StaticTask_t **ppxIdleTaskTCBBuffer, StackTy
 void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
   // LEDTaskStart();
+  UI_TaskStart();
   InsTaskStart();
   DetectTaskStart();
   ChassisTaskStart();

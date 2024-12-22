@@ -36,6 +36,8 @@ extern "C" {
 
     const uint8_t GetStopFlag();
     const uint8_t GetMoveState();
+    const uint8_t GetState();
+    const uint8_t GetLastState();
 
     static void Chassis_Task(void* parameter);
     static void Detect_Task(void* parameter);
