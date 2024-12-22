@@ -21,18 +21,29 @@ extern "C" {
 namespace periph {
     class boson {
     public:
-        boson(bsp::GPIO gpio) : gpio_(gpio), result_(false) {}
+        boson(bsp::GPIO gpio) : gpio_(gpio) {
+            for (int i = 4; i >= 0; i--) {
+                result_[i] = false;
+            }
+        }
         boson();
         ~boson() = default;
         void Detect() {
-            result_ = gpio_.ReadPin();
+            for (int i = 4; i > 0; i--) {
+                result_[i] = result_[i-1];
+            }
+            result_[0] = (!gpio_.ReadPin());
         };
         [[nodiscard]] bool GetColor() const {
-            return result_;
+            float sum = 0;
+            for (int i = 0; i < 5; i ++) {
+                sum += result_[i];
+            }
+            return (sum > 0);
         }
     private:
         bsp::GPIO gpio_;
-        bool result_;
+        bool result_[5];
     };
 }
 

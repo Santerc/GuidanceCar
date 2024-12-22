@@ -38,6 +38,8 @@ extern "C" {
     const uint8_t GetMoveState();
 
     static void Chassis_Task(void* parameter);
+    static void Detect_Task(void* parameter);
+    void DetectTaskStart(void);
     void ChassisTaskStart();
 
 #ifdef __cplusplus

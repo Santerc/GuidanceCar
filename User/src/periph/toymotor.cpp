@@ -32,7 +32,7 @@ periph::periphState toyMotor::Output() {
             backward_gpio_.Set();
         }
     }
-    const auto duty = static_cast<int>(speed_) /1000 * 5000;
+    const auto duty = (fabs(speed_) / 5000.F);
     speed_port_.SetDuty(duty);
     speed_port_.Output();
     return periph::periphState::kOK;

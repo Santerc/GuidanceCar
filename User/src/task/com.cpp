@@ -11,11 +11,11 @@
 Board2PC_t txMsg;
 PC2Board_t rxMsg;
 bsp::Uart pc_port(&huart1);
-bsp::UartTxConfig Transmit(reinterpret_cast<uint8_t *>(&txMsg), sizeof(txMsg), 1000);
+bsp::UartTxConfig Transmit(reinterpret_cast<uint8_t *>(&txMsg), sizeof(txMsg), 10);
 bool connect_on = true;
 uint32_t last_stamp = 10091009;
 
-uint8_t* PC_CallBack(uint16_t num) {
+void PC_CallBack() {
     last_stamp = rxMsg.timestamp;
     memcpy(&rxMsg, pc_port.rx_data_, sizeof(rxMsg));
     if (rxMsg.timestamp == last_stamp) {
@@ -23,19 +23,21 @@ uint8_t* PC_CallBack(uint16_t num) {
     }else {
         connect_on = true;
     }
-    return pc_port.rx_data_;
 }
+
 
 void ComInit() {
     pc_port.InitAndStart();
-    pc_port.AddCallback(PC_CallBack);
+    // pc_port.AddCallback(PC_CallBack);
 }
+
+
 
 void SetTxData() {
     txMsg.timestamp = HAL_GetTick();
     txMsg.stopFlag_ = GetStopFlag();
     txMsg.move_ = GetMoveState();
-    Transmit.Init(reinterpret_cast<uint8_t *>(&txMsg), sizeof(txMsg), 1000);
+    Transmit.Init(reinterpret_cast<uint8_t *>(&txMsg), sizeof(txMsg), 10);
 }
 
 void DataSend() {
@@ -46,8 +48,14 @@ const uint8_t isConnect() {
     return connect_on;
 }
 
-const PC2Board_t* GetRxData() {
-    return &rxMsg;
+ PC2Board_t GetRxData() {
+    return rxMsg;
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+    if (huart == &huart1) {
+        PC_CallBack();
+    }
 }
 
 static void Com_Task(void* parameter)
@@ -57,12 +65,12 @@ static void Com_Task(void* parameter)
 
     while (true)
     {
-        if (connect_on) {
+        if (1) {
             SetTxData();
             DataSend();
         }
 
-        osDelay(1);
+        osDelay(10);
     }
 }
 void ComTaskStart(void)

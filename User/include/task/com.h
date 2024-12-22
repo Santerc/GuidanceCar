@@ -10,13 +10,14 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+    extern PC2Board_t rxMsg;
     const uint8_t isConnect();
-    const PC2Board_t* GetRxData();
     static void Com_Task(void* parameter);
     void ComTaskStart();
+    void PC_CallBack();
 
 #ifdef __cplusplus
 }
 #endif
-
+PC2Board_t GetRxData();
 #endif //PCCOM_H

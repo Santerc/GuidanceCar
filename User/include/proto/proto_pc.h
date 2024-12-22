@@ -11,8 +11,8 @@ extern "C" {
 #endif
 
     enum Mode{
-        kRemoteMode = 0,
-        kTrackingMode = 1,
+        kRemoteMode = 1,
+        kTrackingMode = 0,
         kMappingMode = 2,
         kGuidanceMode = 3,
     };

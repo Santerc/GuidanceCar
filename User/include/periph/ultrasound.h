@@ -16,6 +16,7 @@ extern "C" {
 
 #include "gpio_api.h"
 #include "pwm_api.h"
+#include "stm32h7xx_hal_tim.h"
 #include "periph_state.h"
 
 namespace periph {

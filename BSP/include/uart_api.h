@@ -9,6 +9,7 @@ extern "C" {
 #endif
 
 #include "usart.h"
+#include "stm32h7xx_hal_uart.h"
 
 #ifdef __cplusplus
 }

@@ -20,13 +20,11 @@
 
     bsp::GPIO us_trigger(*GPIOG, GPIO_PIN_4);
 
-    bsp::GPIO left_gpio(*GPIOG, GPIO_PIN_3);
+    bsp::GPIO right_gpio(*GPIOG, GPIO_PIN_3);
     bsp::GPIO middle_gpio(*GPIOG, GPIO_PIN_2);
-    bsp::GPIO right_gpio(*GPIOD, GPIO_PIN_15);
+    bsp::GPIO left_gpio(*GPIOD, GPIO_PIN_15);
     bsp::GPIO road_left_gpio(*GPIOD, GPIO_PIN_14);
     bsp::GPIO road_right_gpio(*GPIOD, GPIO_PIN_11);
-
-    PC2Board_t data_from_PC = *GetRxData();
 
 /*
  *
@@ -51,6 +49,8 @@
             state_ = StateMachine::kTracking;
             latest_side_road_ = RoadSide::kLeftRoad;
             waiting_start_time_ = 0;
+            fsmInit();
+            chassis_sm_.set(kInit);
         }
         ~Chassis() = default;
 
@@ -72,6 +72,15 @@
         fsm::stack chassis_sm_;
         uint32_t waiting_start_time_;
 
+
+        void Init() {
+            motor_left_.init();
+            motor_right_.init();
+            motor_left_.SetDir(periph::toyMotor::Direction::kBack);
+            motor_right_.SetDir(periph::toyMotor::Direction::kFront);
+
+        }
+
         void fsmInit() {
             chassis_sm_.on(kInit, 'tick') = [&](const fsm::args &args) {
                 if (1) {
@@ -81,7 +90,7 @@
 
             chassis_sm_.on(kTracking, 'tick') = [&](const fsm::args &args) {
                 TrackingAction();
-                if (data_from_PC.mode_ == kRemoteMode) {
+                if (GetRxData().mode_ == kRemoteMode) {
                     chassis_sm_.push(kRemote);
                     return;
                 }
@@ -99,7 +108,7 @@
             };
 
             chassis_sm_.on(kStop, 'tick') = [&](const fsm::args &args) {
-                while ((HAL_GetTick() - waiting_start_time_) >= data_from_PC.timestamp * 1000) {
+                while ((HAL_GetTick() - waiting_start_time_) >= GetRxData().timestamp * 1000) {
                     SetSpeed(0, 0);
                 }
                 station_arrive_ = false;
@@ -108,7 +117,7 @@
 
             chassis_sm_.on(kAngle, 'tick') = [&](const fsm::args &args) {
                 AngleAction();
-                if (data_from_PC.mode_ == kRemoteMode) {
+                if (GetRxData().mode_ == kRemoteMode) {
                     chassis_sm_.push(kRemote);
                     return;
                 }
@@ -121,7 +130,7 @@
 
             chassis_sm_.on(kLeave, 'tick') = [&](const fsm::args &args) {
                 LeavingAction();
-                if (data_from_PC.mode_ == kRemoteMode) {
+                if (GetRxData().mode_ == kRemoteMode) {
                     chassis_sm_.push(kRemote);
                     return;
                 }
@@ -132,7 +141,7 @@
 
             chassis_sm_.on(kBack, 'tick') = [&](const fsm::args &args) {
                 BackAction();
-                if (data_from_PC.mode_ == kRemoteMode) {
+                if (GetRxData().mode_ == kRemoteMode) {
                     chassis_sm_.push(kRemote);
                     return;
                 }
@@ -149,28 +158,21 @@
 
             chassis_sm_.on(kRemote, 'tick') = [&](const fsm::args &args) {
                 RemoteAction();
-                if (data_from_PC.mode_ == kTrackingMode) {
+                if (GetRxData().mode_ == kTrackingMode) {
                     chassis_sm_.push(kTracking);
                 }
 
             };
         }
 
-        void Init() {
-            motor_left_.init();
-            motor_right_.init();
-            motor_left_.SetDir(periph::toyMotor::Direction::kFront);
-            motor_right_.SetDir(periph::toyMotor::Direction::kBack);
-            fsmInit();
-        }
-
         void DistanceMeasure() {
             distancer_.Measure();
-            if (distancer_.GetDistance() < 0.2) {
-                obstacle_ = true;
-            }else {
-                obstacle_ = false;
-            }
+            // if (distancer_.GetDistance() < 0.2) {
+            //     obstacle_ = true;
+            // }else {
+            //     obstacle_ = false;
+            // }
+            obstacle_ = false;
         }
 
         void SideRoadDetect() {
@@ -233,19 +235,19 @@
         void TrackingAction() {
             switch (pos_) {
                 case kMiddle:
-                    SetSpeed(2000, 0);
+                    SetSpeed(800, 0);
                     break;
                 case kLeft:
-                    SetSpeed(2000, 2000);
+                    SetSpeed(600, -200);
                     break;
                 case kRight:
-                    SetSpeed(2000, -2000);
+                    SetSpeed(600, 200);
                     break;
                 case kMidLeft:
-                    SetSpeed(2000, 1000);
+                    SetSpeed(800, -100);
                     break;
                 case kMidRight:
-                    SetSpeed(2000, -1000);
+                    SetSpeed(800, 100);
                     break;
                 default:
                     break;
@@ -255,15 +257,15 @@
         void AngleAction() {
             float dir = 1;
             dir = latest_side_road_ == kLeftRoad ? 1 : -1;
-            SetSpeed(0, 1000 * dir);
+            SetSpeed(0, -600 * dir);
         }
 
         void LeavingAction() {
-            SetSpeed(1000, 2000);
+            SetSpeed(1000, 300);
         }
 
         void BackAction() {
-            SetSpeed(1000, -2000);
+            SetSpeed(1000, -300);
         }
 
         void CorrectDistance() {
@@ -273,9 +275,9 @@
         }
 
         void RemoteAction() {
-            float buff = data_from_PC.supercap_ ? 2 : 1;
-            SetSpeed(speed[data_from_PC.move_][0] * buff,
-                speed[data_from_PC.move_][1] * buff);
+            float buff = GetRxData().supercap_ ? 2 : 1;
+            SetSpeed(speed[GetRxData().move_][0] * buff,
+                speed[GetRxData().move_][1] * buff);
         }
 
     private:
@@ -301,10 +303,16 @@ const uint8_t GetMoveState() {
 
 void Chassis_Task(void *parameter) {
     chassis.Init();
-    while (1) {
-        chassis.Detect();
+    while (true) {
         chassis.chassis_sm_.command('tick');
         chassis.Move();
+        osDelay(1);
+    }
+}
+
+void Detect_Task(void *parameter) {
+    while (true) {
+        chassis.Detect();
         osDelay(1);
     }
 }
@@ -312,6 +320,11 @@ void Chassis_Task(void *parameter) {
 void ChassisTaskStart(void)
 {
     xTaskCreate(Chassis_Task, "ChassisTask", 256, NULL, 7, NULL);
+}
+
+void DetectTaskStart(void)
+{
+    xTaskCreate(Detect_Task, "DetectTask", 256, NULL, 7, NULL);
 }
 
 

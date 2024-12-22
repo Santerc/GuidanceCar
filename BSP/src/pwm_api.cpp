@@ -13,7 +13,7 @@ void PWMGenerator::Stop() {
         HAL_TIM_PWM_Stop(htim_, channel_);
         state_ = PWM_State::kOff;
 }
-void PWMGenerator::SetDuty(int duty) {
+void PWMGenerator::SetDuty(float duty) {
 
     duty_ = duty;
 
