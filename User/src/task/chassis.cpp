@@ -9,7 +9,11 @@
 #include "periph/toymotor.h"
 #include "periph/ultrasound.h"
 #include "periph/boson.h"
-#include "fsm.hpp"
+#include "stm32h7xx_it.h"
+#include "pid.h"
+
+int temp = 0;
+
 
 bsp::GPIO left_f(*GPIOG, GPIO_PIN_5);
     bsp::GPIO left_b(*GPIOG, GPIO_PIN_6);
@@ -21,11 +25,15 @@ bsp::GPIO left_f(*GPIOG, GPIO_PIN_5);
 
     bsp::GPIO us_trigger(*GPIOG, GPIO_PIN_4);
 
-    bsp::GPIO right_gpio(*GPIOG, GPIO_PIN_3);
-    bsp::GPIO middle_gpio(*GPIOG, GPIO_PIN_2);
-    bsp::GPIO left_gpio(*GPIOD, GPIO_PIN_15);
+    bsp::GPIO right_gpio(*GPIOG, GPIO_PIN_2);
+    bsp::GPIO middle_gpio(*GPIOD, GPIO_PIN_15);
+    bsp::GPIO left_gpio(*GPIOG, GPIO_PIN_3);
+
     bsp::GPIO road_left_gpio(*GPIOD, GPIO_PIN_14);
     bsp::GPIO road_right_gpio(*GPIOD, GPIO_PIN_11);
+
+PID_PIDTypeDef pid = {0, 0, 0, 0, 0, 0};
+PID_PIDParamTypeDef pparam = {0.3, 0, 0, 45, 100, 0.8};
 
 /*
  *
@@ -47,32 +55,32 @@ bsp::GPIO left_f(*GPIOG, GPIO_PIN_5);
             on_road_ = true;
             obstacle_ = false;
             station_arrive_ = false;
-            state_ = StateMachine::kTracking;
+            state_ = kTracking;
+            last_state_ = kTracking;
             latest_side_road_ = RoadSide::kLeftRoad;
             waiting_start_time_ = 0;
-            fsmInit();
-            chassis_sm_.set(kInit);
         }
         ~Chassis() = default;
 
         const float speed[5][2] = {
-            {1000, 0},
-            {-1000, 0},
             {0, 0},
-            {0, 1000},
-            {0, -1000}
+            {800, 0},
+            {-800, 0},
+            {0, 800},
+            {0, -800}
         };
 
         bool on_road_;
+        bool last_on_road_;
         bool obstacle_;
         bool station_arrive_;
+        bool in_wait_;//YBC
         float vx_ = 0;
         float vw_ = 0;
         TrackingState pos_;
         StateMachine state_;
         StateMachine last_state_;
         RoadSide latest_side_road_;
-        fsm::stack chassis_sm_;
         uint32_t waiting_start_time_;
 
 
@@ -84,136 +92,228 @@ bsp::GPIO left_f(*GPIOG, GPIO_PIN_5);
             motor_right_.SetDir(periph::toyMotor::Direction::kFront);
 
         }
+        uint32_t rest_time_ = 0;
+        uint32_t rushing_start_time_ = 0;
+        int level_ = 0;
+        void StateChange() {
+             switch (state_) {
+                 case kRemote:
+                     RemoteAction();
+                     if (GetRxData().mode_ == kTrackingMode) {
+                         last_state_ = kTracking;
+                         state_ = kTracking;
+                     }
+                     break;
+                 case kInit:
+                     if (1) {
+                         last_state_ = kInit;
+                         state_ = kRemote;
+                     }
+                     break;
+                 case kTracking:
+                     TrackingAction();
+                     // if (GetRxData().mode_ == kRemoteMode) {
+                     //     last_state_ = kTracking;
+                     //     state_ = kRemote;
+                     //     break;
+                     // }
+                     if (obstacle_) {
+                         last_state_ = kTracking;
+                         CorrectDistance();
+                         state_ = kLeave;
+                     }
+                 // else if (station_arrive_) {
+                 //         last_state_ = kTracking;
+                 //         waiting_start_time_ = HAL_GetTick();
+                 //         state_ = kStop;
+                 //         temp ++;
+                 //     }
+                 else if (!on_road_) {
+                         last_state_ = kTracking;
+                         if (level_ == 0) {
+                             level_ ++;
+                             rushing_start_time_ = HAL_GetTick();
+                             //state_ = kWait;//YBC
+                         }else {
+                             state_ = kAngle;
+                             level_ = 0;
+                         }
 
-        void fsmInit() {
-            chassis_sm_.on(kInit, 'tick') = [&](const fsm::args &args) {
-                if (1) {
-                    chassis_sm_.push(kRemote);
-                }
-            };
+                     }else if (in_wait_) {//YBC
+                         state_ = kWait;//YBC
+                     }//YBC
+                     break;
+                 case kAngle:
 
-            chassis_sm_.on(kTracking, 'tick') = [&](const fsm::args &args) {
-                TrackingAction();
-                if (GetRxData().mode_ == kRemoteMode) {
-                    chassis_sm_.push(kRemote);
-                    return;
-                }
-                if (obstacle_) {
-                    chassis_sm_.push(kLeave);
-                }else if (station_arrive_) {
-                    chassis_sm_.push(kStop);
-                }else if (!on_road_) {
-                    chassis_sm_.push(kAngle);
-                }
-            };
+                     AngleAction();
+                     // if (GetRxData().mode_ == kRemoteMode) {
+                     //     last_state_ = kAngle;
+                     //     state_ = kRemote;
+                     //     break;
+                     // }
+                     if (obstacle_) {
+                         last_state_ = kAngle;
+                         CorrectDistance();
+                         state_ = kLeave;
+                     }else if (boson_middle_.GetColor()) {
+                         last_state_ = kAngle;
+                         state_ = kTracking;
+                     }
+                     break;
+                 case kStop:
+                     if ((HAL_GetTick() - waiting_start_time_) <= (GetRxData().stoptime_ * 1000)) {
+                         rest_time_ = (HAL_GetTick() - waiting_start_time_);
+                         SetSpeed(0, 0);
+                         break;
+                     }
+                     station_arrive_ = false;
+                     last_state_ = kStop;
+                     state_ = kTracking;
+                     break;
+                 case kWait:
+                 //     if ((HAL_GetTick() - rushing_start_time_) <= 2000 ){
+                 //         break;
+                 //     }
+                 // last_state_ = kWait;
+                 // state_ = kTracking;//YBC
+                     if (boson_left_.GetColor() && boson_right_.GetColor() && boson_middle_.GetColor() && boson_left_road_.GetColor() && boson_right_road_.GetColor()) {//YBC
+                         station_arrive_ = true;//YBC
+                         in_wait_= false;//YBC
+                         waiting_start_time_ = HAL_GetTick();
+                         state_ = kStop;
+                         // state_ =kGo;
+                     }else {
+                         state_ = kTracking;
+                     }
+                 break;
+                 // case kGo:
+                 //     SetSpeed(800, 0);
+                 //    if (!((boson_left_.GetColor() || boson_right_.GetColor() || boson_middle_.GetColor()) && boson_left_road_.GetColor() && boson_right_road_.GetColor())) {
+                 //        last_state_ = kGo;
+                 //    }
+                 case kLeave:
+                     LeavingAction();
+                     // if (GetRxData().mode_ == kRemoteMode) {
+                     //     last_state_ = kLeave;
+                     //     state_ = kRemote;
+                     //     break;
+                     // }
+                     if (!obstacle_) {
+                         last_state_ = kLeave;
+                         state_ = kBack;
+                     }
+                     break;
+                 case kBack:
+                     BackAction();
+                     // if (GetRxData().mode_ == kRemoteMode) {
+                     //     last_state_ = kBack;
+                     //     state_ = kRemote;
+                     //     break;
+                     // }
+                     if (obstacle_) {
+                         last_state_ = kBack;
+                         CorrectDistance();
+                         state_ = kLeave;
+                     }else if (on_road_) {
+                         last_state_ = kBack;
+                         state_ = kTracking;
+                     }
+                     break;
+                 default:
+                     break;
 
-            chassis_sm_.on(kStop, 'push') = [&](const fsm::args &args) {
-                waiting_start_time_ = HAL_GetTick();
-            };
-
-            chassis_sm_.on(kStop, 'tick') = [&](const fsm::args &args) {
-                while ((HAL_GetTick() - waiting_start_time_) >= GetRxData().timestamp * 1000) {
-                    SetSpeed(0, 0);
-                }
-                station_arrive_ = false;
-                chassis_sm_.push(kTracking);
-            };
-
-            chassis_sm_.on(kAngle, 'tick') = [&](const fsm::args &args) {
-                AngleAction();
-                if (GetRxData().mode_ == kRemoteMode) {
-                    chassis_sm_.push(kRemote);
-                    return;
-                }
-                if (obstacle_) {
-                    chassis_sm_.push(kLeave);
-                }else if (on_road_) {
-                    chassis_sm_.push(kTracking);
-                }
-            };
-
-            chassis_sm_.on(kLeave, 'tick') = [&](const fsm::args &args) {
-                LeavingAction();
-                if (GetRxData().mode_ == kRemoteMode) {
-                    chassis_sm_.push(kRemote);
-                    return;
-                }
-                if (!obstacle_) {
-                    chassis_sm_.push(kBack);
-                }
-            };
-
-            chassis_sm_.on(kBack, 'tick') = [&](const fsm::args &args) {
-                BackAction();
-                if (GetRxData().mode_ == kRemoteMode) {
-                    chassis_sm_.push(kRemote);
-                    return;
-                }
-                if (obstacle_) {
-                    chassis_sm_.push(kLeave);
-                }else if (on_road_) {
-                    chassis_sm_.push(kTracking);
-                }
-            };
-
-            chassis_sm_.on(kLeave, 'push') = [&](const fsm::args &args) {
-                CorrectDistance();
-            };
-
-            chassis_sm_.on(kRemote, 'tick') = [&](const fsm::args &args) {
-                RemoteAction();
-                if (GetRxData().mode_ == kTrackingMode) {
-                    chassis_sm_.push(kTracking);
-                }
-
-            };
+             }
         }
-
+        bool last_on_middle_ = false;
+        bool on_millde_ = false;
         void DistanceMeasure() {
             distancer_.Measure();
-            // if (distancer_.GetDistance() < 0.2) {
-            //     obstacle_ = true;
-            // }else {
-            //     obstacle_ = false;
-            // }
-            obstacle_ = false;
+            if (distancer_.GetDistance() < 0.2) {
+                obstacle_ = true;
+            }else {
+                obstacle_ = false;
+            }
+            // obstacle_ = false;
         }
 
         void SideRoadDetect() {
             boson_left_road_.Detect();
             boson_right_road_.Detect();
-            if (boson_left_road_.GetColor()) {
-                latest_side_road_ = kLeftRoad;
-            }else if (boson_right_road_.GetColor()) {
-                latest_side_road_ = kRightRoad;
+            if (on_road_) {
+                if (boson_left_road_.GetColor()) {
+                    latest_side_road_ = kLeftRoad;
+                }else if (boson_right_road_.GetColor()) {
+                    latest_side_road_ = kRightRoad;
+                }
             }
         }
 
+        bool cross_sig = false;
         void TrackingDetect() {
             boson_middle_.Detect();
             boson_left_.Detect();
             boson_right_.Detect();
-            if (boson_left_.GetColor() || boson_right_.GetColor() || boson_middle_.GetColor()) {
-                on_road_ = true;
-            }else {
-                on_road_ = false;
+            if (boson_left_.GetColor() && boson_right_.GetColor() && boson_middle_.GetColor() && boson_left_road_.GetColor() && boson_right_road_.GetColor()) {
+                //station_arrive_ = true;//YBC
+                in_wait_= true;//YBC
             }
-            if (boson_middle_.GetColor()) {
-                if (boson_left_.GetColor()) {
-                    if (boson_right_.GetColor()) {
-                        pos_ = TrackingState::kMiddle;
-                        if (!boson_left_road_.GetColor() && !boson_right_road_.GetColor()) {
-                            station_arrive_ = true;
-                        }
-                    }else {
-                        pos_ = TrackingState::kMidLeft;
-                    }
-                }else if (boson_right_.GetColor()){
-                    pos_ = TrackingState::kMidRight;
+            if (boson_left_.GetColor() || boson_right_.GetColor() || boson_middle_.GetColor() || boson_left_road_.GetColor() || boson_right_road_.GetColor()) {
+                if (boson_left_.GetColor() || boson_right_.GetColor() || boson_middle_.GetColor()) {
+                    on_millde_ = true;
+                    last_on_middle_ = on_millde_;
                 }else {
-                    pos_ = TrackingState::kMiddle;
+                    if (last_on_middle_) {
+                        on_millde_ = true;
+                        last_on_middle_ = false;
+                        return;
+                    }
                 }
+                on_road_ = true;
+                last_on_road_ = on_road_;
+            }else {
+                if (last_on_road_) {
+                    on_road_ = true;
+                    last_on_road_ = false;
+                    return;
+
+                }else {
+
+                    on_road_ = false;
+                    last_on_road_ = on_road_;
+                }
+            }
+            if (boson_left_road_.GetColor() && boson_right_road_.GetColor()) {
+                pos_ = kMiddle;
             }else if (boson_left_.GetColor()) {
+                pos_ = kMidLeft;
+            }else  if (boson_right_.GetColor()){
+                pos_ = kMidRight;
+            }else if (boson_middle_.GetColor()) {
+                pos_ = kMiddle;
+            }else if (boson_left_road_.GetColor()) {
+                pos_ = kLeft;
+            }else if (boson_right_road_.GetColor()) {
+                pos_ = kRight;
+            }
+            // if (boson_middle_.GetColor()) {
+            //     if (boson_left_.GetColor()) {
+            //         if (boson_right_.GetColor()) {
+            //             pos_ = TrackingState::kMiddle;
+            //             if (!boson_left_road_.GetColor() && !boson_right_road_.GetColor()) {
+            //                 if (state_ != kRemote) {
+            //                     station_arrive_ = true;
+            //                 }
+            //             }
+            //         }else {
+            //             pos_ = TrackingState::kMidLeft;
+            //         }
+            //     }else if (boson_right_.GetColor()){
+            //         pos_ = TrackingState::kMidRight;
+            //     }else {
+            //         pos_ = TrackingState::kMiddle;
+            //     }
+            // }else
+            if (boson_left_.GetColor()) {
                 pos_ = TrackingState::kLeft;
             }else if (boson_right_.GetColor()) {
                 pos_ = TrackingState::kRight;
@@ -221,16 +321,43 @@ bsp::GPIO left_f(*GPIOG, GPIO_PIN_5);
         }
 
         void Detect() {
-            DistanceMeasure();
+            // DistanceMeasure();
             SideRoadDetect();
             TrackingDetect();
         }
 
         void SetSpeed(float vx, float vw) {
-            vx_ = vx;
-            vw_ = vw;
-            motor_left_.SetSpeed(vx + vw);
-            motor_right_.SetSpeed(vx - vw);
+            float gain = 1.F;
+            // if (fabs(fabs(vx) - fabs(vw)) <= 500) {
+            //     gain = 2.5F;
+            // }else if (fabs(fabs(vx) - fabs(vw)) <= 600) {
+            //     gain = 2.F;
+            // }
+            // if (fabs(motor_left_.GetSpeed() - (vx +vw)) >= 50 || fabs(motor_right_.GetSpeed() - (vx - vw)) >= 50) {
+            //     gain = 2.F;
+            // }
+            vx_ = vx * gain;
+            vw_ = vw * gain;
+            PID_SetRef(&pid, vw / 6);
+            PID_SetFdb(&pid, GetInsData()->space_omega_.yaw * 600.F);
+            PID_Calc(&pid, &pparam);
+            gain = PID_GetOutput(&pid);
+            gain = 0;
+            if (gain > 0) {
+                    motor_left_.SetSpeed((vx + vw) * (1 + gain) * 1.2);
+                    motor_right_.SetSpeed(1.0 * (vx + vw));
+            }else {
+                motor_left_.SetSpeed((vx + vw) * 1.2);
+                motor_right_.SetSpeed(1.0 * (vx - vw) / (1 + gain));;
+            }
+            if (state_ == kRemote) {
+                motor_left_.SetSpeed(1.2 * (vx + vw) * 1.0);
+                motor_right_.SetSpeed(1.0 * (vx - vw));
+            }
+            // motor_left_.SetSpeed(vx + vw);
+            // motor_right_.SetSpeed(vx - vw);
+            // motor_left_.SetSpeed(1000);
+            // motor_right_.SetSpeed(0);
         }
 
         void Move() {
@@ -241,19 +368,19 @@ bsp::GPIO left_f(*GPIOG, GPIO_PIN_5);
         void TrackingAction() {
             switch (pos_) {
                 case kMiddle:
-                    SetSpeed(800, 0);
+                    SetSpeed(500, 0);
                     break;
                 case kLeft:
-                    SetSpeed(600, -200);
+                    SetSpeed(300, 300);
                     break;
                 case kRight:
-                    SetSpeed(600, 200);
+                    SetSpeed(300, -300);
                     break;
                 case kMidLeft:
-                    SetSpeed(800, -100);
+                    SetSpeed(300, 300);
                     break;
                 case kMidRight:
-                    SetSpeed(800, 100);
+                    SetSpeed(300, -300);
                     break;
                 default:
                     break;
@@ -263,20 +390,20 @@ bsp::GPIO left_f(*GPIOG, GPIO_PIN_5);
         void AngleAction() {
             float dir = 1;
             dir = latest_side_road_ == kLeftRoad ? 1 : -1;
-            SetSpeed(0, -600 * dir);
+            SetSpeed(0, 600 * dir);
         }
 
         void LeavingAction() {
-            SetSpeed(1000, 300);
+            SetSpeed(500, 600);
         }
 
         void BackAction() {
-            SetSpeed(1000, -300);
+            SetSpeed(500, -600);
         }
 
         void CorrectDistance() {
-            while (distancer_.GetDistance() < 0.1) {
-                SetSpeed(-1000, 0);
+            if (distancer_.GetDistance() < 0.1) {
+                SetSpeed(-800, 0);
             }
         }
 
@@ -300,26 +427,23 @@ bsp::GPIO left_f(*GPIOG, GPIO_PIN_5);
 Chassis chassis;
 
 const uint8_t GetStopFlag() {
-    return chassis.station_arrive_;
+    return !(chassis.station_arrive_);
 }
 
 const uint8_t GetMoveState() {
     if (chassis.vw_ == 0 && chassis.vx_ == 0) {
         return kStopMove;
     }
-    if (GetInsData()->space_omega_.yaw > 0.1) {
+    if (chassis.vw_ < 0) {
         return kLeftMove;
     }
-    if (GetInsData()->space_omega_.yaw < 0.1) {
-        return kLeftMove;
+    if (chassis.vw_ > 0) {
+        return kRightMove;
     }
-    if (GetInsData()->self_vel_.x > 0.1) {
+    if (chassis.vx_ > 0) {
         return kFrontMove;
     }
-    if (GetInsData()->self_vel_.x < 0.1) {
-        return kBackMove;
-    }
-    return kStopMove;
+    return kBackMove;
 }
 const uint8_t GetState()
 {
@@ -330,10 +454,15 @@ const uint8_t GetLastState()
 {
     return chassis.last_state_;
 }
+
+const uint8_t Get_cnt_time() {
+    return chassis.rest_time_/1000;
+}
 void Chassis_Task(void *parameter) {
     chassis.Init();
     while (true) {
-        chassis.chassis_sm_.command('tick');
+        // chassis.Detect();
+        chassis.StateChange();
         chassis.Move();
         osDelay(1);
     }
@@ -353,7 +482,7 @@ void ChassisTaskStart(void)
 
 void DetectTaskStart(void)
 {
-    xTaskCreate(Detect_Task, "DetectTask", 256, NULL, 7, NULL);
+    xTaskCreate(Detect_Task, "DetectTask", 512, NULL, 7, NULL);
 }
 
 

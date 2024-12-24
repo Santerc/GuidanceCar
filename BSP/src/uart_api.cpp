@@ -30,7 +30,7 @@ namespace bsp{
         //         }
         //     }
         //     init_flag_ = true;
-            return (HAL_UART_Receive_IT(p_handle_, rx_data_, 128));
+            return (HAL_UART_Receive_IT(p_handle_, rx_data_, 7));
             // return HAL_OK;
         // }
         // else

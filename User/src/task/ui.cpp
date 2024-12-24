@@ -1,3 +1,4 @@
+      
 //
 // Created by 59794 on 2024/12/15.
 //
@@ -13,12 +14,13 @@
 #include "fsm.hpp"
 #include "task/chassis.h"
 #include "task/com.h"
+#include "task/ins.h"
 
 periph::oled OLED(&hi2c1);
-uint8_t count;
 uint8_t car_velocity;
-float speed = 111.1;
+float speed = 0.0;
 uint8_t stop_num;
+uint8_t stopnumber=0;
 uint8_t car_direction;
 char speedcharbuff[4] = {};
 /*
@@ -28,12 +30,16 @@ char speedcharbuff[4] = {};
  *避障：BLOCK
  */
 
-char* SpeedfloatToString(float num, char* buffer, size_t size)
-{
-    // 使用sprintf格式化浮动数，保留4位有效数字
-    std::snprintf(buffer, size, "%.4g m/s", num);  // 保留4位有效数字并附加单位
-    return buffer;
+void floatToStr(float num, char* str) {
+    if (fabs(num) < 10.0) {
+        sprintf(str, "%.4f", num);
+    } else if (fabs(num) >= 10.0 && fabs(num) < 1000.0) {
+        sprintf(str, "%.3f", num);
+    } else {
+        sprintf(str, "%.3e", num);
+    }
 
+    str[4] = '\0';  // 截断多余的字符
 }
 
 /*显示方向*/
@@ -41,19 +47,19 @@ void DirectionShow(uint8_t direction)
 {
     switch (direction)
     {
-    case 0:/*前进*/
+    case 1:/*前进*/
         {
             OLED.ShowChinese16x16(40,0,0);
             OLED.ShowChinese16x16(40+16,0,1);
             break;
         }
-    case 1:/*后退*/
+    case 2:/*后退*/
         {
             OLED.ShowChinese16x16(40,0,2);
             OLED.ShowChinese16x16(40+16,0,3);
             break;
         }
-    case 2:/*左转*/
+    case 4:/*左转*/
         {
             OLED.ShowChinese16x16(40,0,4);
             OLED.ShowChinese16x16(40+16,0,6);
@@ -67,6 +73,7 @@ void DirectionShow(uint8_t direction)
         }
     default:
         {
+            OLED.ShowString8x16(40,0,const_cast<char*>("STOP"));
             break;
         }
     }
@@ -75,38 +82,39 @@ void DirectionShow(uint8_t direction)
 /*显示速度和挡位*/
 void VelocityShow(uint8_t velocity)
 {
+    // floatToStr(GetSpeed(),speedcharbuff);
+    // OLED.ShowString8x16(40,4,speedcharbuff);
+    // OLED.ShowString8x16(40+32,4,const_cast<char*>("m/s"));
     switch (velocity)
     {
     case 1:/*一挡*/
         {
-            OLED.ShowChinese16x16(36,2,7);
-            OLED.ShowChinese16x16(36+16,2,11);
-            OLED.ShowString8x16(36+16+16,2,SpeedfloatToString(speed,speedcharbuff,4));
+            OLED.ShowChinese16x16(40,2,7);
+            OLED.ShowChinese16x16(40+16,2,11);
             break;
         }
     case 2:/*二挡*/
         {
             OLED.ShowChinese16x16(40,2,8);
             OLED.ShowChinese16x16(40+16,2,11);
-            OLED.ShowString8x16(36+16+16,2,SpeedfloatToString(speed,speedcharbuff,4));
             break;
         }
     case 3:/*三挡*/
         {
             OLED.ShowChinese16x16(40,2,9);
             OLED.ShowChinese16x16(40+16,2,11);
-            OLED.ShowString8x16(36+16+16,2,SpeedfloatToString(speed,speedcharbuff,4));
             break;
         }
     case 4:/*四挡*/
         {
             OLED.ShowChinese16x16(40,2,10);
             OLED.ShowChinese16x16(40+16,2,11);
-            OLED.ShowString8x16(36+16+16,2,SpeedfloatToString(speed,speedcharbuff,4));
             break;
         }
     default:
         {
+            OLED.ShowChinese16x16(40,2,14);
+            OLED.ShowChinese16x16(40+16,2,15);
             break;
         }
     }
@@ -119,22 +127,23 @@ void StateShow()
     {
     case 0:
         {
-            OLED.ShowString8x16(40,4,const_cast<char*>("ON"));
+            OLED.ShowString8x16(0,0,const_cast<char*>("ON"));
             break;
         }
     case 6:
         {
-            OLED.ShowString8x16(8,4,const_cast<char*>("STOP"));
+            OLED.ShowString8x16(0,0,const_cast<char*>("STOP"));
             break;
         }
     case 2:
     case 3:
         {
-            OLED.ShowString8x16(8,4,const_cast<char*>("BLOCK"));
+            OLED.ShowString8x16(32,4,const_cast<char*>("BLOCK"));
             break;
         }
     default:
         {
+        OLED.ShowString8x16(0,0,const_cast<char*>("ON"));
             break;
         }
     }
@@ -144,74 +153,71 @@ void StateShow()
 void ShowStop()
 {
     OLED.ShowChinese16x16(32,2,12);
-    OLED.ShowChar8x16(32+16,2,static_cast<char>(stop_num+48));
+    OLED.ShowChar8x16(32+16,2,static_cast<char>(stopnumber+48));
     OLED.ShowChinese16x16(32+16+16,2,13);
 }
 
-char intToStringChars(uint8_t num) {
-    if (num < 0 || num > 99) {
-        std::cerr << "Error: Input must be a two-digit integer (0-99)." << std::endl;
-        return '\0';
-    }
-
-    char tens = '0' + (num / 10);
-    char ones = '0' + (num % 10);
-
-    return tens;
-}
+uint8_t ctm = 0;
 
 void ShowStopTime()
 {
     OLED.ShowChinese16x16(40,4,14);
     OLED.ShowChinese16x16(40+16,4,15);
     OLED.ShowChar8x16(40+16+16,4,':');
-    if(count >= 10)
-    {
-        char tens = '0' + (count / 10);
-        char ones = '0' + (count % 10);
-        OLED.ShowChar8x16(40+16+16+16,4,tens);
-        OLED.ShowChar8x16(40+16+16+16+16,4,ones);
-    }else
-    {
-        char num = '0' + count;
-        OLED.ShowChar8x16(40+16+16+16,4,num);
-    }
+    char cnt[3];
+    ctm = Get_cnt_time();
+    cnt[0] = '0' + (Get_cnt_time()/ 10);
+    cnt[1] = '0' + (Get_cnt_time() % 10);
+    cnt[2] = '\0';
+    OLED.ShowString8x16(40+16+16+16,4,cnt);
 }
+
+
 /*总体显示*/
+uint8_t laststate = 4;
+
 void Show()
 {
-    if(GetLastState() != GetState())
+    if(laststate != GetState())
     {
         OLED.clear();/*切换状态清屏*/
+        if (GetState()==kStop) {
+            stopnumber++;
+        }
+        laststate = GetState();
+
+
     }
     switch (GetState())
     {
-        case 1:
-            {
-                VelocityShow(car_velocity);
-                DirectionShow(car_direction);
-                break;
-            }
-        case 2:
-            {
-                StateShow();
-                ShowStop();
-                break;
-            }
-        case 3:
-            {
-                StateShow();
-                ShowStop();
-                ShowStopTime();
-                break;
-            }
+        case 0: {
+            StateShow();
+            ShowStop();
+            break;
+        }
         case 4:
+            {
+                DirectionShow(GetMoveState());
+                VelocityShow(rxMsg.speed_);
+                break;
+            }
+        case 6: {
+            StateShow();
+            ShowStop();
+            ShowStopTime();
+            break;
+
+        }
+        case 2:
+        case 3:
             {
                 StateShow();
                 break;
             }
         default:
             {
+            StateShow();
+            ShowStop();
                 break;
             }
     }
@@ -220,11 +226,16 @@ void Show()
 
 void UI_Task(void*argument)
 {
+    OLED.init();
+    OLED.clear();
   for(;;)
   {
         Show();
+        osDelay(10);
   }
 }
 void UI_TaskStart(void){
-    xTaskCreate(UI_Task,"UI_Task",256,NULL,7,NULL);
+    xTaskCreate(UI_Task,"UI_Task",512,NULL,7,NULL);
 }
+
+    

@@ -15,8 +15,26 @@ void toyMotor::SetDir(Direction dir) {
 }
 
 void toyMotor::SetSpeed(float speed) {
-    speed *= static_cast<int>(direction_);
+    speed *= (float)direction_;
+    // if (last_speed_ ==0 || (fabs(speed_ - last_speed_) >= 50)) {
+    //     speed *= 1.25;
+    // }
+    last_speed_ = speed_;
     speed_ = speed;
+}
+
+float toyMotor::GetSpeed() {
+    return speed_;
+}
+
+float lmt(float num, float max, float min) {
+    if (num > max) {
+        return max;
+    }
+    if (num < min) {
+        return min;
+    }
+    return num;
 }
 
 periph::periphState toyMotor::Output() {
@@ -32,7 +50,8 @@ periph::periphState toyMotor::Output() {
             backward_gpio_.Set();
         }
     }
-    const auto duty = (fabs(speed_) / 5000.F);
+
+    const auto duty = (lmt(fabs(speed_) / 5000.F, 0.8F, -0.8F));
     speed_port_.SetDuty(duty);
     speed_port_.Output();
     return periph::periphState::kOK;

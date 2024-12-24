@@ -32,8 +32,9 @@ extern "C" {
         kLv4 = 4
     };
 
-    typedef struct{
-        uint32_t  timestamp;
+    typedef struct __attribute__((packed)){
+        uint8_t head;
+        uint8_t counter;
         uint8_t connect_;
         uint8_t move_;
         uint8_t mode_;
@@ -43,7 +44,8 @@ extern "C" {
 
     }PC2Board_t;
 
-    typedef struct{
+    typedef struct __attribute__((packed)){
+        uint8_t head;
         uint32_t  timestamp;
         uint8_t stopFlag_;
         uint8_t move_;

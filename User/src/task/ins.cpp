@@ -165,7 +165,7 @@ static void INS_Task(void* parameter)
         //     bsx_out.orientation.pitch,
         //     bsx_out.orientation.roll};
         // Navigation();
-
+        // Inti();
         ins_data.space_omega_ = {
             ins.gyro_data_.yaw,
             ins.gyro_data_.pitch,
@@ -185,8 +185,13 @@ const insData_t* GetInsData() {
     return &ins_data;
 }
 
+const float GetSpeed()
+{
+    return sqrtf(ins_data.space_vel_.x * ins_data.space_vel_.x + ins_data.space_vel_.y * ins_data.space_vel_.y);
+}
+
 void InsTaskStart(void)
 {
-    xTaskCreate(INS_Task, "LEDTask", 256, NULL, 7, NULL);
+    xTaskCreate(INS_Task, "INSTask", 256, NULL, 7, NULL);
 }
 

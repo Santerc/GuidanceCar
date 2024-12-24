@@ -57,6 +57,8 @@ file(GLOB_RECURSE source_c CONFIGURE_DEPENDS
         User/*.cpp User/*.h
         BSP/*.cpp BSP/*.h
         Device/*.cpp Device/*.h
+        Library/*.cpp Library/*.h
+        Library/*.c
 )
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         ${source_c}
@@ -69,6 +71,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         third/CMSIS-DSP/1.15.0/include
         third/IMU/include
         third/fsm
+        Library/algorithm
 
 )
 

@@ -67,10 +67,6 @@ void Error_Handler(void);
 #define Gyro_INT_Pin GPIO_PIN_8
 #define Gyro_INT_GPIO_Port GPIOF
 #define Gyro_INT_EXTI_IRQn EXTI9_5_IRQn
-#define DBUS_RX_Pin GPIO_PIN_7
-#define DBUS_RX_GPIO_Port GPIOE
-#define NO_USED_Pin GPIO_PIN_8
-#define NO_USED_GPIO_Port GPIOE
 #define Buzzer_Pin GPIO_PIN_12
 #define Buzzer_GPIO_Port GPIOD
 #define LED_Pin GPIO_PIN_13

@@ -32,14 +32,15 @@ namespace periph {
             for (int i = 4; i > 0; i--) {
                 result_[i] = result_[i-1];
             }
-            result_[0] = (!gpio_.ReadPin());
+            result_[0] = (gpio_.ReadPin());
         };
         [[nodiscard]] bool GetColor() const {
             float sum = 0;
             for (int i = 0; i < 5; i ++) {
                 sum += result_[i];
             }
-            return (sum > 0);
+            return result_[0];
+            // return (sum > 0);
         }
     private:
         bsp::GPIO gpio_;

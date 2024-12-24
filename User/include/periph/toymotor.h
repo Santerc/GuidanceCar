@@ -33,18 +33,22 @@ namespace periph {
         toyMotor(bsp::PWMGenerator pwm, bsp::GPIO forward, bsp::GPIO backward)
         :forward_gpio_(forward), backward_gpio_(backward), speed_port_(pwm) {
             speed_ = 0.F;
+            last_speed_ = 0.F;
             direction_ = Direction::kFront;
         }
         ~toyMotor() = default;
+        float delta_speed_ = 0;
         void init();
         void SetDir(Direction dir);
         void SetSpeed(float speed);
-        periph::periphState Output();
+        float GetSpeed();
+        periphState Output();
     private:
         bsp::GPIO forward_gpio_;
         bsp::GPIO backward_gpio_;
         bsp::PWMGenerator speed_port_;
         float speed_;
+        float last_speed_;
         Direction direction_;
 
     };

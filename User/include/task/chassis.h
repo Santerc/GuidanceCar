@@ -23,7 +23,9 @@ extern "C" {
         kBack = 3,          //避障回归模式
         kRemote = 4,        //遥控
         kInit = 5,           //初始化
-        kStop = 6           //等车状态
+        kStop = 6,           //等车状态
+        kWait = 7,
+        // kGo = 8
     };
 
     enum TrackingState {
@@ -46,12 +48,14 @@ extern "C" {
     const uint8_t GetMoveState();
     const uint8_t GetState();
     const uint8_t GetLastState();
+    const uint8_t Get_cnt_time();
 
     static void Chassis_Task(void* parameter);
     static void Detect_Task(void* parameter);
     void DetectTaskStart(void);
     void ChassisTaskStart();
 
+    extern int temp;
 #ifdef __cplusplus
 }
 #endif

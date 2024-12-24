@@ -32,7 +32,7 @@ extern "C" {
     }insData_t;
 
     const insData_t* GetInsData();
-
+    const float GetSpeed();
     static void Ins_Task(void* parameter);
     void InsTaskStart();
 
