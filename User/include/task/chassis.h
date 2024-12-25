@@ -25,7 +25,9 @@ extern "C" {
         kInit = 5,           //初始化
         kStop = 6,           //等车状态
         kWait = 7,
-        // kGo = 8
+        kGo = 8,
+        kGo2= 9,
+        kLeavest = 10
     };
 
     enum TrackingState {

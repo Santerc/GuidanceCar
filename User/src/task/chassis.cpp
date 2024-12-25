@@ -82,7 +82,8 @@ PID_PIDParamTypeDef pparam = {0.3, 0, 0, 45, 100, 0.8};
         StateMachine last_state_;
         RoadSide latest_side_road_;
         uint32_t waiting_start_time_;
-
+        uint32_t go_time_in=0;
+        uint32_t go_time_out=0;
 
 
         void Init() {
@@ -94,7 +95,9 @@ PID_PIDParamTypeDef pparam = {0.3, 0, 0, 45, 100, 0.8};
         }
         uint32_t rest_time_ = 0;
         uint32_t rushing_start_time_ = 0;
+        uint32_t str_time = 0;
         int level_ = 0;
+        int dbg_time = 10;
         void StateChange() {
              switch (state_) {
                  case kRemote:
@@ -112,22 +115,22 @@ PID_PIDParamTypeDef pparam = {0.3, 0, 0, 45, 100, 0.8};
                      break;
                  case kTracking:
                      TrackingAction();
-                     // if (GetRxData().mode_ == kRemoteMode) {
-                     //     last_state_ = kTracking;
-                     //     state_ = kRemote;
-                     //     break;
-                     // }
+                     if (GetRxData().mode_ == kRemoteMode) {
+                         last_state_ = kTracking;
+                         state_ = kRemote;
+                         break;
+                     }
                      if (obstacle_) {
                          last_state_ = kTracking;
                          CorrectDistance();
                          state_ = kLeave;
                      }
-                 // else if (station_arrive_) {
-                 //         last_state_ = kTracking;
-                 //         waiting_start_time_ = HAL_GetTick();
-                 //         state_ = kStop;
-                 //         temp ++;
-                 //     }
+                 else if (station_arrive_) {
+                         last_state_ = kTracking;
+                         waiting_start_time_ = HAL_GetTick();
+                         state_ = kStop;
+                         temp ++;
+                     }
                  else if (!on_road_) {
                          last_state_ = kTracking;
                          if (level_ == 0) {
@@ -140,17 +143,18 @@ PID_PIDParamTypeDef pparam = {0.3, 0, 0, 45, 100, 0.8};
                          }
 
                      }else if (in_wait_) {//YBC
-                         state_ = kWait;//YBC
+                         go_time_out = HAL_GetTick();
+                         state_ = kGo2;//YBC
                      }//YBC
                      break;
                  case kAngle:
 
                      AngleAction();
-                     // if (GetRxData().mode_ == kRemoteMode) {
-                     //     last_state_ = kAngle;
-                     //     state_ = kRemote;
-                     //     break;
-                     // }
+                     if (GetRxData().mode_ == kRemoteMode) {
+                         last_state_ = kAngle;
+                         state_ = kRemote;
+                         break;
+                     }
                      if (obstacle_) {
                          last_state_ = kAngle;
                          CorrectDistance();
@@ -171,45 +175,71 @@ PID_PIDParamTypeDef pparam = {0.3, 0, 0, 45, 100, 0.8};
                      state_ = kTracking;
                      break;
                  case kWait:
-                 //     if ((HAL_GetTick() - rushing_start_time_) <= 2000 ){
-                 //         break;
-                 //     }
-                 // last_state_ = kWait;
-                 // state_ = kTracking;//YBC
+                     if ((HAL_GetTick() - rushing_start_time_) <= 2000 ){
+                         break;
+                     }
+                 last_state_ = kWait;
+                 state_ = kTracking;//YBC
                      if (boson_left_.GetColor() && boson_right_.GetColor() && boson_middle_.GetColor() && boson_left_road_.GetColor() && boson_right_road_.GetColor()) {//YBC
                          station_arrive_ = true;//YBC
                          in_wait_= false;//YBC
                          waiting_start_time_ = HAL_GetTick();
                          state_ = kStop;
-                         // state_ =kGo;
+                         go_time_in=HAL_GetTick();
+                         state_ =kGo;
+
                      }else {
                          state_ = kTracking;
                      }
                  break;
-                 // case kGo:
-                 //     SetSpeed(800, 0);
-                 //    if (!((boson_left_.GetColor() || boson_right_.GetColor() || boson_middle_.GetColor()) && boson_left_road_.GetColor() && boson_right_road_.GetColor())) {
-                 //        last_state_ = kGo;
-                 //    }
+                 case kGo:
+                     if ((HAL_GetTick()-go_time_in) < 200) {
+                         SetSpeed(500, 0);
+                         break;
+                     }
+                    station_arrive_ = true;//YBC
+                    in_wait_= false;//YBC
+                    waiting_start_time_ = HAL_GetTick();
+                     state_ = kStop;
+                    last_state_ = kTracking;
+                    state_ = kStop;
+                    break;
+                 case kGo2:
+                     if ((HAL_GetTick()-go_time_out) < 50) {
+                         SetSpeed(500, 0);
+                         break;
+                     }
+                    state_ = kWait;
+                    break;
+
                  case kLeave:
                      LeavingAction();
-                     // if (GetRxData().mode_ == kRemoteMode) {
-                     //     last_state_ = kLeave;
-                     //     state_ = kRemote;
-                     //     break;
-                     // }
+                     if (GetRxData().mode_ == kRemoteMode) {
+                         last_state_ = kLeave;
+                         state_ = kRemote;
+                         break;
+                     }
                      if (!obstacle_) {
                          last_state_ = kLeave;
-                         state_ = kBack;
+                         str_time = HAL_GetTick();
+                         state_ = kLeavest;
                      }
                      break;
+                 case kLeavest:
+                     if ((HAL_GetTick() - str_time) < 1000) {
+                         SetSpeed(400, 0);
+                         break;
+                     }
+                    last_state_ = kLeave;
+                    state_ = kBack;
+                    break;
                  case kBack:
                      BackAction();
-                     // if (GetRxData().mode_ == kRemoteMode) {
-                     //     last_state_ = kBack;
-                     //     state_ = kRemote;
-                     //     break;
-                     // }
+                     if (GetRxData().mode_ == kRemoteMode) {
+                         last_state_ = kBack;
+                         state_ = kRemote;
+                         break;
+                     }
                      if (obstacle_) {
                          last_state_ = kBack;
                          CorrectDistance();
@@ -321,7 +351,7 @@ PID_PIDParamTypeDef pparam = {0.3, 0, 0, 45, 100, 0.8};
         }
 
         void Detect() {
-            // DistanceMeasure();
+            DistanceMeasure();
             SideRoadDetect();
             TrackingDetect();
         }
@@ -342,16 +372,16 @@ PID_PIDParamTypeDef pparam = {0.3, 0, 0, 45, 100, 0.8};
             PID_SetFdb(&pid, GetInsData()->space_omega_.yaw * 600.F);
             PID_Calc(&pid, &pparam);
             gain = PID_GetOutput(&pid);
-            gain = 0;
+            //gain = 0;
             if (gain > 0) {
-                    motor_left_.SetSpeed((vx + vw) * (1 + gain) * 1.2);
+                    motor_left_.SetSpeed((vx + vw) * (1 + gain) * 1.1);
                     motor_right_.SetSpeed(1.0 * (vx + vw));
             }else {
-                motor_left_.SetSpeed((vx + vw) * 1.2);
+                motor_left_.SetSpeed((vx + vw) * 1.1);
                 motor_right_.SetSpeed(1.0 * (vx - vw) / (1 + gain));;
             }
             if (state_ == kRemote) {
-                motor_left_.SetSpeed(1.2 * (vx + vw) * 1.0);
+                motor_left_.SetSpeed(1.1 * (vx + vw) * 1.0);
                 motor_right_.SetSpeed(1.0 * (vx - vw));
             }
             // motor_left_.SetSpeed(vx + vw);
@@ -394,23 +424,34 @@ PID_PIDParamTypeDef pparam = {0.3, 0, 0, 45, 100, 0.8};
         }
 
         void LeavingAction() {
-            SetSpeed(500, 600);
+            if (distancer_.GetDistance() < 0.1) {
+                SetSpeed(-400, 0);
+            }else {
+                SetSpeed(500, 200);
+            }
+
         }
 
         void BackAction() {
-            SetSpeed(500, -600);
-        }
-
-        void CorrectDistance() {
             if (distancer_.GetDistance() < 0.1) {
-                SetSpeed(-800, 0);
+                SetSpeed(0, 500);
+            }else {
+                SetSpeed(500, -200);
             }
         }
 
+        void CorrectDistance() {
+            if (distancer_.GetDistance() < 0.2) {
+                SetSpeed(-400, 0);
+            }
+        }
+    int counter = 0;
         void RemoteAction() {
             float buff = GetRxData().supercap_ ? 2 : 1;
-            SetSpeed(speed[GetRxData().move_][0] * buff,
-                speed[GetRxData().move_][1] * buff);
+            SetSpeed(speed[counter][0] * buff * (1 + 0.2 * GetRxData().speed_),
+                speed[counter][1] * buff * (1 + 0.2 * GetRxData().speed_));
+            // SetSpeed(speed[GetRxData().move_][0] * buff * (1 + 0.2 * GetRxData().speed_),
+            //     speed[GetRxData().move_][1] * buff * (1 + 0.2 * GetRxData().speed_));
         }
 
     private:
